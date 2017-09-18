@@ -2372,15 +2372,28 @@ from notebook.conf import ENABLE_QUERY_BUILDER, ENABLE_QUERY_SCHEDULING, get_ord
         var self = this;
         self.disposals = [];
         self.selectedNotebook = ko.observable();
+        self.isSchedulerJobRunning = ko.observable();
 
         // TODO: Move all the scheduler logic out of the notebook to here.
 
         var selectedNotebookSub = self.selectedNotebook.subscribe(function (notebook) { // Happening 4 times for each notebook loaded
           if (notebook && notebook.schedulerViewModel == null && notebook.isSaved() && ! notebook.isHistory()) {
             notebook.loadScheduler();
+            if (self.viewSchedulerId()) {
+              huePubSub.publish('check.schedules.browser');
+            }
           }
         });
         self.disposals.push(selectedNotebookSub.dispose.bind(selectedNotebookSub));
+
+        huePubSub.subscribe('jobbrowser.schedule.data', function (jobs) {
+          if (self.selectedNotebook().viewSchedulerId()) {
+            var _job = $.grep(jobs, function (job) {
+              return self.selectedNotebook().viewSchedulerId() == job.id;
+            });
+            self.isSchedulerJobRunning(_job.length > 0 && job[0].apiStatus == 'RUNNING');
+          }
+        });
 
         // Hue 3
         var setSelectedNotebookSub = huePubSub.subscribe('set.selected.notebook', self.selectedNotebook);
@@ -2401,7 +2414,7 @@ from notebook.conf import ENABLE_QUERY_BUILDER, ENABLE_QUERY_SCHEDULING, get_ord
               });
             }
           } else {
-            self.selectedNotebook(undefined);
+            self.selectedNotebook(null);
           }
         });
         self.disposals.push(currentAppSub.remove.bind(currentAppSub));
